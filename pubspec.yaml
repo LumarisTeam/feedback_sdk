@@ -1,5 +1,5 @@
 name: feedback_sdk
-description: LumarisTeam 统一反馈中心 Flutter SDK。封装匿名身份、图片压缩、图文反馈上传与提交，供「光序 / 光汇」复用。
+description: Unified feedback center Flutter SDK for anonymous image and text bug reports.
 version: 0.1.0
 publish_to: none
 
