@@ -1,0 +1,27 @@
+name: feedback_sdk
+description: LumarisTeam 统一反馈中心 Flutter SDK。封装匿名身份、图片压缩、图文反馈上传与提交，供「光序 / 光汇」复用。
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.4.0
+  shared_preferences: ^2.2.0
+  image: ^4.1.0
+  uuid: ^4.3.0
+  device_info_plus: ^10.0.0
+  package_info_plus: ^9.0.0
+  flutter_image_compress: ^2.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: false
