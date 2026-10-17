@@ -66,8 +66,8 @@
 ### 4.4 安全（关键决策）
 - COS 桶**完全私有**，图片访问用动态 Presign GET URL（15 分钟），不暴露固定 URL（防盗刷）。
 - Presign PUT 绑定 `Content-Type`；**Content-Length 钉死为 presign 声明的 `size`**（腾讯云 COS 预签名不支持 `content-length-range` 区间，后端改为钉死长度，仍从签名层杜绝超 5MB）。含义：**PUT 的字节数必须与 presign 的 `size` 完全一致，否则 COS 403**。SDK 已保证 `size = 压缩后字节数` 且 PUT 同一份字节。
-- 产品线通过 `extra.app_name` 区分：光序 `lumaris` / 光汇 `lumalis`（**无 channel 字段**）。
-- **多学校**：`extra.school` 标识学校（slug，如 `xauat`）。同一产品铺多校，靠 `app_name + school` 共同区分；SDK 配置项 `FeedbackConfig.school` 自动写入，为空则跳过。
+- 产品线通过「反馈中心 ID + sn」区分：取码 `POST /feedback-centers/{center_id}/codes` 携带 `{sn}`，光序 `lumaris-prod` / 光汇 `lumalis-prod`（**无 channel 字段**）。
+- **多学校**：`extra.school` 标识学校（slug，如 `xauat`）。同一产品铺多校，靠 `center_id + school` 共同区分；SDK 配置项 `FeedbackConfig.school` 自动写入，为空则跳过。
 - 管理员 token 仅 `ADMIN_API_TOKEN`，不能写入客户端。
 
 ## 5. 接口清单
@@ -78,7 +78,8 @@
 | GET | `/healthz` | 健康检查 |
 | POST | `/api/v1/uploads/presign` | 拿 `file_key` + `upload_url` + `headers.Content-Type` |
 | POST | `/api/v1/uploads/confirm` | 返回 `attachment_id`（幂等） |
-| POST | `/api/v1/feedbacks` | 返回 `feedback_no`（`request_id` 幂等） |
+| POST | `/api/v1/feedback-centers/{center_id}/codes` | 取一次性校验码（body `{sn}`，返回 `timestamp/nonce/code`） |
+| POST | `/api/v1/feedbacks` | 返回 `feedback_no`（`request_id` 幂等；需 5 个校验头） |
 
 ### 管理员（Bearer ADMIN_API_TOKEN）
 | 方法 | 路径 | 说明 |
@@ -119,8 +120,8 @@
 | 类 | 核心方法 | 职责 |
 |---|---|---|
 | `FeedbackSdk` | `init(config)` / `submit(...)` / `uploadImage(...)` / `newRequestId()` | 门面：初始化 + 提交 |
-| `FeedbackConfig` | 构造参数 `baseUrl` / `appName` / `longEdge` / `maxImageBytes` … | 全局配置 |
-| `FeedbackApi` | `presign()` / `putImage()` / `confirm()` / `submit()` / `toFeedback()` | HTTP 层，注入 X-Client-ID |
+| `FeedbackConfig` | 构造参数 `baseUrl` / `centerId` / `sn` / `longEdge` / `maxImageBytes` … | 全局配置 |
+| `FeedbackApi` | `presign()` / `putImage()` / `confirm()` / `issueCode()` / `submit()` / `toFeedback()` | HTTP 层，注入 X-Client-ID |
 | `FeedbackUploader` | `uploadImage()` / `_confirmWithRetry()` | 上传编排 + 重试 |
 | `ImageProcessor` | `process(raw) → ProcessedImage` | 解码/EXIF/长边限制/转码/阶梯压缩 |
 | `ClientIdStore` | `getOrCreate()` | 匿名 ID 持久化 |

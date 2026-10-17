@@ -5,7 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 /// 自动采集环境信息，用于填充提交反馈时的 `extra` 字段。
 ///
 /// 采集内容：app_version / app_build / platform / os_version / device_model / page。
-/// 注意：`app_name` 不在这里采集（它由 `FeedbackConfig.appName` 决定，用于区分产品线）。
+/// 注意：`app_name` 不在这里采集（后端由反馈中心的 appId 覆盖，客户端不再传）。
 class DeviceInfoHelper {
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
 

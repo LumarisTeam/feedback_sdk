@@ -60,6 +60,7 @@ class FeedbackSdk {
   /// 提交反馈，返回 feedback_no。
   ///
   /// [extra] 会覆盖自动采集的同名字段；[requestId] 重试时复用同一个以幂等。
+  /// 每次提交都先取一次性校验码；重试复用 request_id，但会重新取码。
   Future<String> submit({
     required String content,
     required String contact,
@@ -70,17 +71,21 @@ class FeedbackSdk {
   }) async {
     final device = await deviceInfo.collect(page: page);
     final merged = <String, dynamic>{
-      'app_name': config.appName,
       if (config.school.isNotEmpty) 'school': config.school,
       ...device,
       ...extra,
     };
+    final ticket = await api.issueCode(
+      centerId: config.centerId,
+      sn: config.sn,
+    );
     return api.submit(
       requestId: requestId ?? newRequestId(),
       content: content,
       contact: contact,
       attachmentIds: attachmentIds,
       extra: merged,
+      ticket: ticket,
     );
   }
 }

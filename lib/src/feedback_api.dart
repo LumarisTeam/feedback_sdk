@@ -12,6 +12,23 @@ class PresignResult {
   const PresignResult(this.fileKey, this.uploadUrl, this.contentType);
 }
 
+/// 取码结果。提交反馈时需原样回传到校验头，一次性使用、绑定 client_id。
+class CodeTicket {
+  final String centerId;
+  final int timestamp;
+  final String sn;
+  final String nonce;
+  final String code;
+
+  const CodeTicket({
+    required this.centerId,
+    required this.timestamp,
+    required this.sn,
+    required this.nonce,
+    required this.code,
+  });
+}
+
 /// 后端 HTTP 层，统一注入 `X-Client-ID`。
 class FeedbackApi {
   final Dio _dio;
@@ -69,21 +86,51 @@ class FeedbackApi {
     return (res.data['data']['attachment_id'] as num).toInt();
   }
 
-  /// 提交反馈，返回 feedback_no。
+  /// 取一次性反馈校验码。校验码一次性、绑定 client_id，过期（默认 15 分钟）需重新取。
+  Future<CodeTicket> issueCode({
+    required String centerId,
+    required String sn,
+  }) async {
+    final res = await _dio.post(
+      '/api/v1/feedback-centers/$centerId/codes',
+      data: {'sn': sn},
+    );
+    final d = res.data['data'] as Map;
+    return CodeTicket(
+      centerId: d['centerId'] as String,
+      timestamp: (d['timestamp'] as num).toInt(),
+      sn: d['sn'] as String,
+      nonce: d['nonce'] as String,
+      code: d['code'] as String,
+    );
+  }
+
+  /// 提交反馈，返回 feedback_no。需先 [issueCode] 取到一次性 [CodeTicket]。
   Future<String> submit({
     required String requestId,
     required String content,
     required String contact,
+    required CodeTicket ticket,
     List<int> attachmentIds = const [],
     Map<String, dynamic> extra = const {},
   }) async {
-    final res = await _dio.post('/api/v1/feedbacks', data: {
-      'request_id': requestId,
-      'content': content,
-      'contact': contact,
-      'attachment_ids': attachmentIds,
-      'extra': extra,
-    });
+    final res = await _dio.post(
+      '/api/v1/feedbacks',
+      data: {
+        'request_id': requestId,
+        'content': content,
+        'contact': contact,
+        'attachment_ids': attachmentIds,
+        'extra': extra,
+      },
+      options: Options(headers: {
+        'X-Feedback-Center-Id': ticket.centerId,
+        'X-Timestamp': ticket.timestamp.toString(),
+        'X-SN': ticket.sn,
+        'X-Nonce': ticket.nonce,
+        'X-Code': ticket.code,
+      }),
+    );
     return res.data['data']['feedback_no'] as String;
   }
 

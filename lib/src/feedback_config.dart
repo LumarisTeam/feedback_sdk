@@ -3,9 +3,12 @@ class FeedbackConfig {
   /// 后端地址，形如 https://feedbackapi.luckyfishes.site
   final String baseUrl;
 
-  /// 产品线标识，区分「光序 / 光汇」：
-  /// 光序 = 'lumaris'，光汇 = 'lumalis'。会写入 extra.app_name。
-  final String appName;
+  /// 反馈中心 ID（后端在管理页创建，形如 fc_xxx）。取码与提交都要用。
+  final String centerId;
+
+  /// 产品线 / 环境标识（sn，构建期常量）：
+  /// 光序 = 'lumaris-prod'，光汇 = 'lumalis-prod'。取码时作为 {sn} 提交。
+  final String sn;
 
   /// 学校标识（slug），多学校部署时必填，如 'xauat'。会写入 extra.school。
   /// 为空则不写入 extra（兼容单学校场景）。
@@ -31,7 +34,8 @@ class FeedbackConfig {
 
   const FeedbackConfig({
     required this.baseUrl,
-    required this.appName,
+    required this.centerId,
+    required this.sn,
     this.school = '',
     this.maxImageCount = 6,
     this.maxImageBytes = 5 * 1024 * 1024,

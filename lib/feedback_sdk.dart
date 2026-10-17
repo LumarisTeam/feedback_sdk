@@ -4,7 +4,8 @@
 /// ```dart
 /// final sdk = await FeedbackSdk.init(FeedbackConfig(
 ///   baseUrl: 'https://feedbackapi.luckyfishes.site',
-///   appName: 'lumaris', // 或 'lumalis'
+///   centerId: 'fc_xxx', // 反馈中心 ID（后端管理页创建）
+///   sn: 'lumaris-prod', // 光序 = lumaris-prod，光汇 = lumalis-prod
 /// ));
 /// ```
 library feedback_sdk;

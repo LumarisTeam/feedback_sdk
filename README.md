@@ -39,8 +39,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await FeedbackSdk.init(FeedbackConfig(
     baseUrl: 'https://feedbackapi.luckyfishes.site',
-    appName: 'lumaris', // 光序 = lumaris，光汇 = lumalis
-    school: 'xauat',    // 学校 slug，多学校部署时填；单学校可省略
+    centerId: 'fc_xxx',   // 反馈中心 ID（后端管理页创建）
+    sn: 'lumaris-prod',   // 光序 = lumaris-prod，光汇 = lumalis-prod
+    school: 'xauat',      // 学校 slug，多学校部署时填；单学校可省略
   ));
   runApp(const MyApp());
 }
@@ -88,4 +89,4 @@ try {
 - **选图不在 SDK 内**：SDK 只接收原始字节（`Uint8List`），选图用 `image_picker` 由 App 负责。
 - **HEIC**：`image` 包不解码 HEIC；iOS 的 `image_picker` 默认会把 HEIC 转成 JPEG，Android 少见 HEIC，一般无需额外处理。
 - **HTTP/HTTPS**：生产务必用 `https`；若联调用 `http`，iOS 需配 ATS 例外、Android 需 `usesCleartextTraffic`。
-- **自动采集**：`extra` 会自动带上 `app_name / app_version / app_build / platform / os_version / device_model / page`。
+- **自动采集**：`extra` 会自动带上 `app_version / app_build / platform / os_version / device_model / page`（`app_name` 由后端按反馈中心 appId 覆盖，客户端不传）。
