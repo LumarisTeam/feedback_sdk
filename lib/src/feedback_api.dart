@@ -2,10 +2,30 @@ import 'package:dio/dio.dart';
 
 import 'feedback_exception.dart';
 
+/// 反馈中心一次性校验码。
+class FeedbackCode {
+  final String centerId;
+  final int timestamp;
+  final String sn;
+  final String nonce;
+  final String code;
+  final DateTime expiresAt;
+
+  const FeedbackCode({
+    required this.centerId,
+    required this.timestamp,
+    required this.sn,
+    required this.nonce,
+    required this.code,
+    required this.expiresAt,
+  });
+}
+
 /// presign 返回结果。
 class PresignResult {
   final String fileKey;
   final String uploadUrl;
+
   /// 必须一字不差回传给 PUT，后端签名绑定了 content-type。
   final String contentType;
 
@@ -16,21 +36,30 @@ class PresignResult {
 class FeedbackApi {
   final Dio _dio;
   final String _clientId;
+  final Uri _baseUri;
 
   FeedbackApi({required String baseUrl, required String clientId, Dio? dio})
       : _clientId = clientId,
+        _baseUri = Uri.parse(baseUrl),
         _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: baseUrl,
-              connectTimeout: const Duration(seconds: 15),
-              receiveTimeout: const Duration(seconds: 30),
-            )) {
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        options.headers['X-Client-ID'] = _clientId;
-        handler.next(options);
-      },
-    ));
+            Dio(
+              BaseOptions(
+                baseUrl: baseUrl,
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 30),
+              ),
+            ) {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          // COS PUT 使用绝对 URL；匿名身份头只发给反馈 API，不泄露给对象存储。
+          if (!options.uri.hasScheme || options.uri.origin == _baseUri.origin) {
+            options.headers['X-Client-ID'] = _clientId;
+          }
+          handler.next(options);
+        },
+      ),
+    );
   }
 
   String get clientId => _clientId;
@@ -41,11 +70,10 @@ class FeedbackApi {
     required int size,
     required String mimeType,
   }) async {
-    final res = await _dio.post('/api/v1/uploads/presign', data: {
-      'filename': filename,
-      'size': size,
-      'mime_type': mimeType,
-    });
+    final res = await _dio.post(
+      '/api/v1/uploads/presign',
+      data: {'filename': filename, 'size': size, 'mime_type': mimeType},
+    );
     final d = res.data['data'] as Map;
     return PresignResult(
       d['file_key'] as String,
@@ -65,8 +93,31 @@ class FeedbackApi {
 
   /// 3) 确认上传，返回 attachment_id。
   Future<int> confirm(String fileKey) async {
-    final res = await _dio.post('/api/v1/uploads/confirm', data: {'file_key': fileKey});
+    final res = await _dio.post(
+      '/api/v1/uploads/confirm',
+      data: {'file_key': fileKey},
+    );
     return (res.data['data']['attachment_id'] as num).toInt();
+  }
+
+  /// 获取一次性反馈校验码；code 与当前 X-Client-ID 绑定。
+  Future<FeedbackCode> issueCode({
+    required String centerId,
+    required String sn,
+  }) async {
+    final res = await _dio.post(
+      '/api/v1/feedback-centers/${Uri.encodeComponent(centerId)}/codes',
+      data: {'sn': sn},
+    );
+    final d = res.data['data'] as Map;
+    return FeedbackCode(
+      centerId: d['centerId'] as String,
+      timestamp: (d['timestamp'] as num).toInt(),
+      sn: d['sn'] as String,
+      nonce: d['nonce'] as String,
+      code: d['code'] as String,
+      expiresAt: DateTime.parse(d['expireAt'] as String),
+    );
   }
 
   /// 提交反馈，返回 feedback_no。
@@ -74,16 +125,32 @@ class FeedbackApi {
     required String requestId,
     required String content,
     required String contact,
+    required FeedbackCode code,
     List<int> attachmentIds = const [],
     Map<String, dynamic> extra = const {},
+    String? captchaToken,
   }) async {
-    final res = await _dio.post('/api/v1/feedbacks', data: {
-      'request_id': requestId,
-      'content': content,
-      'contact': contact,
-      'attachment_ids': attachmentIds,
-      'extra': extra,
-    });
+    final res = await _dio.post(
+      '/api/v1/feedbacks',
+      data: {
+        'request_id': requestId,
+        'content': content,
+        'contact': contact,
+        'attachment_ids': attachmentIds,
+        'extra': extra,
+      },
+      options: Options(
+        headers: {
+          'X-Feedback-Center-Id': code.centerId,
+          'X-Timestamp': code.timestamp.toString(),
+          'X-SN': code.sn,
+          'X-Nonce': code.nonce,
+          'X-Code': code.code,
+          if (captchaToken != null && captchaToken.isNotEmpty)
+            'X-Captcha-Token': captchaToken,
+        },
+      ),
+    );
     return res.data['data']['feedback_no'] as String;
   }
 
@@ -96,6 +163,14 @@ class FeedbackApi {
           data['code'] as int,
           (data['message'] ?? '') as String,
           httpStatus: e.response?.statusCode,
+          challenge: CaptchaChallenge.fromResponseData(data['data']),
+        );
+      }
+      if (e.response?.statusCode == 404) {
+        return const FeedbackException(
+          -1,
+          '反馈服务版本不兼容，请联系开发者',
+          httpStatus: 404,
         );
       }
       return FeedbackException(-1, '网络异常', httpStatus: e.response?.statusCode);

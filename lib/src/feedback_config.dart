@@ -11,6 +11,12 @@ class FeedbackConfig {
   /// 为空则不写入 extra（兼容单学校场景）。
   final String school;
 
+  /// 反馈中心 ID。一个 App + 一个环境对应一个反馈中心。
+  final String centerId;
+
+  /// 反馈中心 SN 常量，如 'lumaris-prod'。
+  final String sn;
+
   /// 最多图片数量（后端限制 6 张）。
   final int maxImageCount;
 
@@ -32,6 +38,8 @@ class FeedbackConfig {
   const FeedbackConfig({
     required this.baseUrl,
     required this.appName,
+    required this.centerId,
+    required this.sn,
     this.school = '',
     this.maxImageCount = 6,
     this.maxImageBytes = 5 * 1024 * 1024,

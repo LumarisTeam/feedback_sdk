@@ -5,6 +5,8 @@
 /// final sdk = await FeedbackSdk.init(FeedbackConfig(
 ///   baseUrl: 'https://feedbackapi.luckyfishes.site',
 ///   appName: 'lumaris', // 或 'lumalis'
+///   centerId: 'fc_xxx',
+///   sn: 'lumaris-prod',
 /// ));
 /// ```
 library feedback_sdk;
