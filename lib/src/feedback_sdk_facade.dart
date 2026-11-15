@@ -1,9 +1,12 @@
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
+
 import 'client_id_store.dart';
 import 'device_info_helper.dart';
 import 'feedback_api.dart';
 import 'feedback_config.dart';
+import 'feedback_exception.dart';
 import 'feedback_uploader.dart';
 import 'image_processor.dart';
 
@@ -26,10 +29,17 @@ class FeedbackSdk {
   });
 
   static FeedbackSdk get instance =>
-      _instance ?? (throw StateError('FeedbackSdk 未初始化，请先 await FeedbackSdk.init(...)'));
+      _instance ??
+      (throw StateError('FeedbackSdk 未初始化，请先 await FeedbackSdk.init(...)'));
 
   /// 初始化（需在 runApp 前 await，或首次使用前完成）。
   static Future<FeedbackSdk> init(FeedbackConfig config) async {
+    if (config.centerId.trim().isEmpty) {
+      throw ArgumentError.value(config.centerId, 'centerId', '不能为空');
+    }
+    if (config.sn.trim().isEmpty) {
+      throw ArgumentError.value(config.sn, 'sn', '不能为空');
+    }
     final clientId = await ClientIdStore().getOrCreate();
     final api = FeedbackApi(baseUrl: config.baseUrl, clientId: clientId);
     final uploader = FeedbackUploader(
@@ -60,6 +70,8 @@ class FeedbackSdk {
   /// 提交反馈，返回 feedback_no。
   ///
   /// [extra] 会覆盖自动采集的同名字段；[requestId] 重试时复用同一个以幂等。
+  /// [captchaTokenProvider] 仅在服务端返回 42801 时调用；拿到 token 后 SDK
+  /// 会自动重新取一次性码并重试一次。
   Future<String> submit({
     required String content,
     required String contact,
@@ -67,6 +79,7 @@ class FeedbackSdk {
     String? page,
     Map<String, dynamic> extra = const {},
     String? requestId,
+    CaptchaTokenProvider? captchaTokenProvider,
   }) async {
     final device = await deviceInfo.collect(page: page);
     final merged = <String, dynamic>{
@@ -75,12 +88,36 @@ class FeedbackSdk {
       ...device,
       ...extra,
     };
-    return api.submit(
-      requestId: requestId ?? newRequestId(),
-      content: content,
-      contact: contact,
-      attachmentIds: attachmentIds,
-      extra: merged,
-    );
+    final rid = requestId ?? newRequestId();
+    String? captchaToken;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      // 每次提交都重新取码；网络重试复用 requestId，但绝不复用一次性 code。
+      final code =
+          await api.issueCode(centerId: config.centerId, sn: config.sn);
+      try {
+        return await api.submit(
+          requestId: rid,
+          content: content,
+          contact: contact,
+          code: code,
+          attachmentIds: attachmentIds,
+          extra: merged,
+          captchaToken: captchaToken,
+        );
+      } on DioException catch (e) {
+        final mapped = FeedbackApi.toFeedback(e);
+        if (mapped.code != 42801) rethrow;
+        if (attempt > 0 ||
+            captchaTokenProvider == null ||
+            mapped.challenge == null) {
+          throw mapped;
+        }
+        captchaToken = await captchaTokenProvider(mapped.challenge!);
+        if (captchaToken == null || captchaToken.trim().isEmpty) {
+          throw mapped;
+        }
+      }
+    }
+    throw const FeedbackException(42801, '需要完成人机验证');
   }
 }
